@@ -1,0 +1,7 @@
+# Data files (large datasets)
+data/
+*.csv
+*.json
+*.parquet
+*.pickle
+*.pkl
