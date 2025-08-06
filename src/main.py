@@ -1,13 +1,12 @@
-import os
+# main.py
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import pandas as pd
-from typing import List, Dict, Any
 import logging
 from dotenv import load_dotenv
 from pathlib import Path
+from api.recommendations import initialize_recommender, router as recommendations_router
 
 load_dotenv()
 
@@ -39,6 +38,7 @@ async def lifespan(app: FastAPI):
     games_df = loader.json_to_dataframe()
 
     logger.info(f"✅ Loaded {len(games_df):,} games")
+    initialize_recommender(games_df)
     yield
     logger.info("🛑 Shutting down Game Recommendation API...")
 
@@ -71,6 +71,9 @@ async def health_check():
         "service": "ml-game-recommender",
         "games_loaded": len(games_df) if games_df is not None else 0
     }
+
+
+app.include_router(recommendations_router, prefix="/api/recommendations", tags=["recommendations"])
 
 
 @app.get("/api/games/stats")
