@@ -5,3 +5,5 @@ data/
 *.parquet
 *.pickle
 *.pkl
+
+cache/

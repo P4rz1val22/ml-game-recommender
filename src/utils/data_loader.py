@@ -1,3 +1,5 @@
+# data_loader.py
+
 import json
 import pandas as pd
 from typing import Dict, List, Any
@@ -11,7 +13,7 @@ class SteamJSONLoader:
         self.df = None
 
     def load_json(self) -> Dict:
-        """Load raw JSON data"""
+        """Load raw JSON data from the file"""
         print(f"Loading JSON from {self.json_path}")
 
         with open(self.json_path, 'r', encoding='utf-8') as f:
@@ -21,7 +23,7 @@ class SteamJSONLoader:
         return self.raw_data
 
     def json_to_dataframe(self) -> pd.DataFrame:
-        """Convert JSON to clean pandas DataFrame"""
+        """Converts the JSON to a clean pandas DataFrame"""
         if not self.raw_data:
             self.load_json()
 
