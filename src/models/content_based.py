@@ -17,12 +17,12 @@ class ContentBasedRecommender:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)  # Create cache directory
 
-        # Cache file paths
-        self.embeddings_cache = self.cache_dir / f"popular_embeddings_{model_name.replace('/', '_')}.npy"
-        self.games_cache = self.cache_dir / f"popular_games_{model_name.replace('/', '_')}.pkl"
-        self.mapping_cache = self.cache_dir / f"app_id_mapping_{model_name.replace('/', '_')}.pkl"
+        # Cache file paths - updated for RAWG
+        self.embeddings_cache = self.cache_dir / f"rawg_embeddings_{model_name.replace('/', '_')}.npy"
+        self.games_cache = self.cache_dir / f"rawg_games_{model_name.replace('/', '_')}.pkl"
+        self.mapping_cache = self.cache_dir / f"rawg_id_mapping_{model_name.replace('/', '_')}.pkl"
 
-        logger.info(f"🧠 Initializing ContentBasedRecommender with {model_name}")
+        logger.info(f"🧠 Initializing ContentBasedRecommender with {model_name} for RAWG data")
 
     def _load_sentence_model(self):
         """Lazy load the sentence transformer model"""
@@ -43,7 +43,7 @@ class ContentBasedRecommender:
 
                 import pickle
                 with open(self.mapping_cache, 'rb') as f:
-                    self.app_id_to_index = pickle.load(f)
+                    self.game_id_to_index = pickle.load(f)
 
                 return True
         except Exception as e:
@@ -61,21 +61,19 @@ class ContentBasedRecommender:
 
             import pickle
             with open(self.mapping_cache, 'wb') as f:
-                pickle.dump(self.app_id_to_index, f)
+                pickle.dump(self.game_id_to_index, f)
 
             logger.info("✅ Cache saved successfully!")
         except Exception as e:
             logger.error(f"❌ Cache saving failed: {e}")
 
     def fit_popular_games(self, games_df: pd.DataFrame):
-        """Fit the model on popular games with caching"""
-        logger.info("🔥 Fitting model on popular games...")
+        """Fit the model on popular games with caching - RAWG version"""
+        logger.info("🔥 Fitting model on RAWG popular games...")
 
-        # Filter to popular games only
-        self.popular_games = games_df[
-            ~games_df['estimated_owners'].isin(['0 - 20000', '0 - 0'])
-        ].copy()
-        logger.info(f"📊 Popular games dataset: {len(self.popular_games):,} games")
+        # Use the games_df directly - it should already be filtered by the data loader
+        self.popular_games = games_df.copy()
+        logger.info(f"📊 RAWG popular games dataset: {len(self.popular_games):,} games")
 
         # Check if we have cached embeddings
         if self._load_from_cache():
@@ -86,8 +84,9 @@ class ContentBasedRecommender:
         logger.info("💾 No cache found, generating embeddings (this will take a few minutes)...")
         self._load_sentence_model()
 
-        descriptions = self.popular_games['detailed_description'].fillna('').tolist()
-        logger.info("🔤 Generating embeddings for game descriptions...")
+        # Use RAWG description fields
+        descriptions = self.popular_games['description_raw'].fillna('').tolist()
+        logger.info("🔤 Generating embeddings for RAWG game descriptions...")
 
         self.popular_embeddings = self.sentence_model.encode(
             descriptions,
@@ -95,9 +94,9 @@ class ContentBasedRecommender:
             batch_size=32
         )
 
-        # Create app_id mapping
-        self.app_id_to_index = {
-            str(app_id): idx for idx, app_id in enumerate(self.popular_games['app_id'])
+        # Create game_id mapping (RAWG uses 'id' not 'app_id')
+        self.game_id_to_index = {
+            str(game_id): idx for idx, game_id in enumerate(self.popular_games['id'])
         }
 
         # Save to cache for next time
@@ -106,19 +105,19 @@ class ContentBasedRecommender:
         logger.info(f"✅ Model fitted and cached successfully!")
         logger.info(f"📐 Embeddings shape: {self.popular_embeddings.shape}")
 
-    def _get_user_preference_vector(self, liked_app_ids: List[str]) -> Optional[np.ndarray]:
-        """Calculate user preference vector from liked games"""
+    def _get_user_preference_vector(self, liked_game_ids: List[str]) -> Optional[np.ndarray]:
+        """Calculate user preference vector from liked games - RAWG version"""
         valid_embeddings = []
         found_games = []
 
-        for app_id in liked_app_ids:
-            if str(app_id) in self.app_id_to_index:
-                idx = self.app_id_to_index[str(app_id)]
+        for game_id in liked_game_ids:
+            if str(game_id) in self.game_id_to_index:
+                idx = self.game_id_to_index[str(game_id)]
                 valid_embeddings.append(self.popular_embeddings[idx])
                 found_games.append(self.popular_games.iloc[idx]['name'])
 
         if not valid_embeddings:
-            logger.warning(f"❌ No valid games found in popular dataset from: {liked_app_ids}")
+            logger.warning(f"❌ No valid games found in popular dataset from: {liked_game_ids}")
             return None
 
         logger.info(f"✅ Found {len(valid_embeddings)} games: {found_games}")
@@ -129,17 +128,17 @@ class ContentBasedRecommender:
 
     def recommend_popular(
             self,
-            liked_app_ids: List[str],
+            liked_game_ids: List[str],
             n: int = 10,
             exclude_owned: bool = True
     ) -> List[Dict[str, Any]]:
-        """Generate recommendations from popular games"""
+        """Generate recommendations from popular games - RAWG version"""
 
         if self.popular_embeddings is None:
             raise ValueError("Model not fitted! Call fit_popular_games() first.")
 
         # Get user preference vector
-        user_preference = self._get_user_preference_vector(liked_app_ids)
+        user_preference = self._get_user_preference_vector(liked_game_ids)
         if user_preference is None:
             return []
 
@@ -149,15 +148,15 @@ class ContentBasedRecommender:
         # Get top similar games
         if exclude_owned:
             # Exclude games user already owns
-            owned_indices = [self.app_id_to_index[str(app_id)]
-                             for app_id in liked_app_ids
-                             if str(app_id) in self.app_id_to_index]
+            owned_indices = [self.game_id_to_index[str(game_id)]
+                             for game_id in liked_game_ids
+                             if str(game_id) in self.game_id_to_index]
             similarities[owned_indices] = -1  # Set to -1 so they won't be selected
 
         # Get top N indices
         top_indices = np.argsort(similarities)[::-1][:n]
 
-        # Format recommendations
+        # Format recommendations - RAWG fields
         recommendations = []
         for idx in top_indices:
             if similarities[idx] <= 0:  # Skip excluded or irrelevant games
@@ -165,14 +164,16 @@ class ContentBasedRecommender:
 
             game = self.popular_games.iloc[idx]
             recommendations.append({
-                'app_id': str(game['app_id']),
+                'game_id': str(game['id']),
                 'name': game['name'],
+                'description': game['description_raw'][:200] + '...',
+                'release_date': str(game['released'])[:10],
                 'genres': game['genres'],
-                'tags': game['tags'][:100] + '...' if len(game['tags']) > 100 else game['tags'],
-                'positive_reviews': int(game['positive']),
-                'negative_reviews': int(game['negative']),
-                'estimated_owners': game['estimated_owners'],
-                'price': float(game['price']),
+                'tags': game['tags'][:100] + '...' if len(str(game['tags'])) > 100 else str(game['tags']),
+                'rating': float(game['rating']),
+                'ratings_count': int(game['ratings_count']),
+                'added_to_library': int(game['added']),
+                'platforms': game['platforms'],
                 'similarity_score': float(similarities[idx]),
                 'reason': f"Similar to games you liked"
             })
@@ -180,20 +181,21 @@ class ContentBasedRecommender:
         logger.info(f"🎯 Generated {len(recommendations)} recommendations")
         return recommendations[:n]
 
-    def get_game_info(self, app_id: str) -> Optional[Dict[str, Any]]:
-        """Get detailed info for a specific game"""
-        if str(app_id) not in self.app_id_to_index:
+    def get_game_info(self, game_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed info for a specific game - RAWG version"""
+        if str(game_id) not in self.game_id_to_index:
             return None
 
-        idx = self.app_id_to_index[str(app_id)]
+        idx = self.game_id_to_index[str(game_id)]
         game = self.popular_games.iloc[idx]
 
         return {
-            'app_id': str(game['app_id']),
+            'game_id': str(game['id']),
             'name': game['name'],
-            'description': game['detailed_description'][:200] + '...',
+            'description': game['description_raw'][:200] + '...',
             'genres': game['genres'],
-            'price': float(game['price']),
-            'positive_reviews': int(game['positive']),
-            'estimated_owners': game['estimated_owners']
+            'rating': float(game['rating']),
+            'ratings_count': int(game['ratings_count']),
+            'added_to_library': int(game['added']),
+            'platforms': game['platforms']
         }

@@ -12,18 +12,22 @@ router = APIRouter()
 recommender: ContentBasedRecommender = None
 
 
-def initialize_recommender(games_df):
-    """Initialize the global recommender instance"""
+def initialize_recommender(processed_df, loader):
+    """Initialize the global recommender instance with RAWG data"""
     global recommender
-    logger.info("🤖 Initializing recommendation engine...")
+    logger.info("🤖 Initializing RAWG recommendation engine...")
+
+    # Get engagement-based popular games
+    popular_df = loader.get_engagement_based_popular_games(debug=False)
+
     recommender = ContentBasedRecommender()
-    recommender.fit_popular_games(games_df)
-    logger.info("✅ Recommendation engine ready!")
+    recommender.fit_popular_games(popular_df)
+    logger.info("✅ RAWG recommendation engine ready!")
 
 
 @router.post("/popular", response_model=RecommendationResponse)
 async def get_popular_recommendations(request: RecommendationRequest):
-    """Get recommendations from popular games"""
+    """Get recommendations from popular games using RAWG data"""
     if recommender is None:
         raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
 
@@ -31,7 +35,7 @@ async def get_popular_recommendations(request: RecommendationRequest):
 
     try:
         recommendations = recommender.recommend_popular(
-            liked_app_ids=request.liked_games,
+            liked_game_ids=request.liked_games,  # Updated parameter name
             n=request.limit,
             exclude_owned=request.exclude_owned
         )
@@ -46,7 +50,7 @@ async def get_popular_recommendations(request: RecommendationRequest):
         return RecommendationResponse(
             recommendations=game_recs,
             total_found=len(game_recs),
-            algorithm="content_based_popular",
+            algorithm="content_based_rawg_engagement",  # Updated algorithm name
             processing_time_ms=round(processing_time, 2)
         )
 

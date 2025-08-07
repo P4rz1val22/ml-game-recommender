@@ -6,8 +6,8 @@ class RecommendationRequest(BaseModel):
     """Request model for game recommendations"""
     liked_games: List[str] = Field(
         ...,
-        description="List of app IDs for games the user has liked",
-        example=["7940", "730", "440"]  # COD4, CS:GO, TF2
+        description="List of game IDs for games the user has liked",
+        example=["58175"]  # Half-Life 2, Left 4 Dead 2, Portal
     )
     limit: int = Field(
         default=10,
@@ -22,33 +22,53 @@ class RecommendationRequest(BaseModel):
 
 
 class GameRecommendation(BaseModel):
-    """Individual game recommendation"""
-    app_id: str
+    """Individual game recommendation - RAWG schema"""
+    game_id: str
     name: str
+    description: str
+    release_date: str
     genres: str
     tags: str
-    positive_reviews: int
-    negative_reviews: int
-    estimated_owners: str
-    price: float
+    rating: float
+    ratings_count: int
+    added_to_library: int
+    platforms: str
     similarity_score: float
     reason: str
+
+
+class GameDetail(BaseModel):
+    """Detailed game information - unified format"""
+    game_id: str
+    name: str
+    description: str
+    genres: str
+    tags: str
+    platforms: str
+    rating: float
+    ratings_count: int
+    added_to_library: int
+    release_date: Optional[str]
+    metacritic: Optional[int]
+    developers: str
+    publishers: str
 
 
 class RecommendationResponse(BaseModel):
     """Response model for recommendations"""
     recommendations: List[GameRecommendation]
     total_found: int
-    algorithm: str = "content_based_popular"
+    algorithm: str = "content_based_rawg_engagement"
     processing_time_ms: Optional[float] = None
 
 
 class GameInfo(BaseModel):
-    """Detailed game information"""
-    app_id: str
+    """Detailed game information - RAWG schema"""
+    game_id: str
     name: str
     description: str
     genres: str
-    price: float
-    positive_reviews: int
-    estimated_owners: str
+    rating: float
+    ratings_count: int
+    added_to_library: int
+    platforms: str
