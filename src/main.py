@@ -29,17 +29,17 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"✅ Loaded {len(games_df):,} RAWG games")
 
-    # Initialize recommender with engagement-based popular games
+    # Initialize all recommenders with engagement-based popular games
     initialize_recommender(games_df, loader)
 
-    # Initialize search service after recommender is ready
-    from api.recommendations import recommender
+    # Initialize search service after recommenders are ready
+    from api.recommendations import content_recommender  # Updated: use content_recommender instead of recommender
     from services.game_search import GameSearchService
     import api.games as games_api
 
     games_api.search_service = GameSearchService(
-        recommender.popular_games,
-        recommender.game_id_to_index
+        content_recommender.popular_games,
+        content_recommender.game_id_to_index
     )
     logger.info("✅ Game search service ready!")
 
@@ -69,7 +69,8 @@ async def root():
         "message": "🎮 RAWG Game Recommendation API is running!",
         "games_loaded": len(games_df) if games_df is not None else 0,
         "data_source": "RAWG Video Games Database",
-        "platforms": "Multi-platform support"
+        "platforms": "Multi-platform support",
+        "models": ["content_based", "genre_based", "tag_based"]  # Added model info
     }
 
 
@@ -79,7 +80,8 @@ async def health_check():
         "status": "healthy",
         "service": "rawg-ml-game-recommender",
         "games_loaded": len(games_df) if games_df is not None else 0,
-        "data_source": "RAWG"
+        "data_source": "RAWG",
+        "models_available": 3  # Added model count
     }
 
 

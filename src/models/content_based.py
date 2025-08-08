@@ -181,6 +181,22 @@ class ContentBasedRecommender:
         logger.info(f"🎯 Generated {len(recommendations)} recommendations")
         return recommendations[:n]
 
+    def get_similarities(self, liked_game_ids: List[str]) -> np.ndarray:
+        """Get content similarity scores for all games (for hybrid use)"""
+        if self.popular_embeddings is None:
+            raise ValueError("Model not fitted! Call fit_popular_games() first.")
+
+        # Get user preference vector (reuse existing logic)
+        user_preference = self._get_user_preference_vector(liked_game_ids)
+        if user_preference is None:
+            return np.zeros(len(self.popular_games))
+
+        # Calculate similarities to all popular games
+        from sklearn.metrics.pairwise import cosine_similarity
+        similarities = cosine_similarity([user_preference], self.popular_embeddings)[0]
+
+        return similarities
+
     def get_game_info(self, game_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed info for a specific game - RAWG version"""
         if str(game_id) not in self.game_id_to_index:
