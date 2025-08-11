@@ -31,15 +31,11 @@ class FranchiseDetector:
 
         name = str(game_name).strip()
 
-        # Remove common sequel patterns
         for pattern in self.sequel_patterns:
             name = re.sub(pattern, '', name, flags=re.IGNORECASE)
 
-        # Clean up remaining whitespace
         name = name.strip()
 
-        # Handle special cases where the above patterns might be too aggressive
-        # If we end up with something too short, use original name
         if len(name) < 3:
             return str(game_name).strip()
 

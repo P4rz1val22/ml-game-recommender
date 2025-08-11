@@ -6,3 +6,13 @@ sentence-transformers
 numpy
 requests
 pydantic
+logging
+pathlib
+time
+sklearn
+re
+datasets
+transformers
+torch
+pickle-mixin
+typing
