@@ -264,14 +264,17 @@ class HybridRecommender:
         if not (0.99 <= total_weight <= 1.01):
             raise ValueError(f"Weights must sum to 1.0, got {total_weight}")
 
-        logger.info(f"🎚️ Using weights: {weights}")
+        logger.info(f"Using weights: {weights}")
 
-        # Get similarity scores from each model
-        desc_similarities = self.content_recommender.get_similarities(liked_game_ids)
-        genre_similarities = self.genre_recommender.get_similarities(liked_game_ids)
-        tag_similarities = self.tag_recommender.get_similarities(liked_game_ids)
+        if hasattr(self, '_cached_desc_similarities'):
+            desc_similarities = self._cached_desc_similarities
+            genre_similarities = self._cached_genre_similarities
+            tag_similarities = self._cached_tag_similarities
+        else:
+            desc_similarities = self.content_recommender.get_similarities(liked_game_ids)
+            genre_similarities = self.genre_recommender.get_similarities(liked_game_ids)
+            tag_similarities = self.tag_recommender.get_similarities(liked_game_ids)
 
-        # Weighted combination
         final_similarities = (
                 weights["description"] * desc_similarities +
                 weights["genre"] * genre_similarities +
@@ -291,7 +294,16 @@ class HybridRecommender:
     ) -> List[Dict[str, Any]]:
         """Generate hybrid recommendations with comprehensive filtering"""
 
-        # Get combined similarity scores
+        # Clear any previous cached similarities
+        self._clear_similarity_cache()
+
+        # Get individual model similarities (cache these for model breakdown)
+        logger.info("🔄 Computing individual model similarities...")
+        self._cached_desc_similarities = self.content_recommender.get_similarities(liked_game_ids)
+        self._cached_genre_similarities = self.genre_recommender.get_similarities(liked_game_ids)
+        self._cached_tag_similarities = self.tag_recommender.get_similarities(liked_game_ids)
+
+        # Get combined similarity scores using cached results
         similarities = self.get_similarities(liked_game_ids, weights)
 
         if np.all(similarities == 0):
@@ -352,11 +364,14 @@ class HybridRecommender:
                 'platforms': str(game['platforms']) if pd.notna(game['platforms']) else '',
                 'similarity_score': float(similarities[idx]),
                 'reason': f"Hybrid match: {hybrid_explanation}{filter_explanation}",
-                'model_breakdown': self._get_model_breakdown(liked_game_ids, str(game['id']))
+                'model_breakdown': self._get_model_breakdown_cached(str(game['id']))
             })
 
             if len(recommendations) >= n:
                 break
+
+        # Clear cache after use to free memory
+        self._clear_similarity_cache()
 
         logger.info(f"🎯 Generated {len(recommendations)} hybrid recommendations with filtering")
         return recommendations
@@ -367,7 +382,7 @@ class HybridRecommender:
             recommended_game_id: str,
             weights: Dict[str, float]
     ) -> str:
-        """Create explanation showing which model contributed most"""
+        """Create explanation showing which model contributed most (OPTIMIZED)"""
 
         # Get individual similarities for this specific game
         if str(recommended_game_id) not in self.game_id_to_index:
@@ -375,9 +390,10 @@ class HybridRecommender:
 
         idx = self.game_id_to_index[str(recommended_game_id)]
 
-        desc_score = self.content_recommender.get_similarities(liked_game_ids)[idx]
-        genre_score = self.genre_recommender.get_similarities(liked_game_ids)[idx]
-        tag_score = self.tag_recommender.get_similarities(liked_game_ids)[idx]
+        # Use cached similarities instead of recalculating
+        desc_score = self._cached_desc_similarities[idx]
+        genre_score = self._cached_genre_similarities[idx]
+        tag_score = self._cached_tag_similarities[idx]
 
         # Calculate weighted contributions
         desc_contribution = weights["description"] * desc_score
@@ -403,8 +419,31 @@ class HybridRecommender:
         else:
             return "Tag mechanics + genre/content support"
 
+    def _clear_similarity_cache(self):
+        """Clear cached similarity scores to free memory"""
+        if hasattr(self, '_cached_desc_similarities'):
+            delattr(self, '_cached_desc_similarities')
+        if hasattr(self, '_cached_genre_similarities'):
+            delattr(self, '_cached_genre_similarities')
+        if hasattr(self, '_cached_tag_similarities'):
+            delattr(self, '_cached_tag_similarities')
+
+    def _get_model_breakdown_cached(self, recommended_game_id: str) -> Dict[str, float]:
+        """Get individual model scores using cached similarities (OPTIMIZED)"""
+        if str(recommended_game_id) not in self.game_id_to_index:
+            return {"description": 0.0, "genre": 0.0, "tags": 0.0}
+
+        idx = self.game_id_to_index[str(recommended_game_id)]
+
+        # Use cached similarities - no additional API calls!
+        return {
+            "description": float(self._cached_desc_similarities[idx]),
+            "genre": float(self._cached_genre_similarities[idx]),
+            "tags": float(self._cached_tag_similarities[idx])
+        }
+
     def _get_model_breakdown(self, liked_game_ids: List[str], recommended_game_id: str) -> Dict[str, float]:
-        """Get individual model scores for transparency"""
+        """Get individual model scores for transparency (LEGACY - less efficient)"""
         if str(recommended_game_id) not in self.game_id_to_index:
             return {"description": 0.0, "genre": 0.0, "tags": 0.0}
 
