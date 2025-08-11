@@ -166,7 +166,7 @@ GET /health
 
 Customize recommendation strategy by adjusting model importance:
 
-```json
+```
 // Balanced (default) - Best overall results
 {
   "description": 0.6,
@@ -200,7 +200,7 @@ Customize recommendation strategy by adjusting model importance:
 
 **Franchise Filtering:**
 
-```json
+```
 {
   "exclude_franchise": true
 }  // No Left 4 Dead 1 when you like Left 4 Dead 2
@@ -208,7 +208,7 @@ Customize recommendation strategy by adjusting model importance:
 
 **Platform Filtering:**
 
-```json
+```
 {
   "platforms": [
     "PC",
@@ -219,7 +219,7 @@ Customize recommendation strategy by adjusting model importance:
 
 **Date Range Filtering:**
 
-```json
+```
 {
   "min_year": 2020
 }          // Only modern games
@@ -234,7 +234,7 @@ Customize recommendation strategy by adjusting model importance:
 
 **Quality Filtering:**
 
-```json
+```
 {
   "min_rating": 4.0,
   "min_reviews": 500
