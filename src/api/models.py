@@ -38,12 +38,34 @@ class ModelWeights(BaseModel):
         return v
 
 
+class GameFilters(BaseModel):
+    """Advanced filtering options for game recommendations"""
+    exclude_franchise: bool = Field(default=False, description="Exclude games from same franchise as liked games")
+    platforms: Optional[List[str]] = Field(default=None, description="Filter by platforms (e.g., ['PC', 'PlayStation', 'Xbox'])")
+    min_year: Optional[int] = Field(default=None, ge=1970, le=2030, description="Minimum release year (e.g., 2020)")
+    max_year: Optional[int] = Field(default=None, ge=1970, le=2030, description="Maximum release year (e.g., 2015)")
+    min_rating: Optional[float] = Field(default=None, ge=0.0, le=5.0, description="Minimum game rating (e.g., 3.5)")
+    min_reviews: Optional[int] = Field(default=None, ge=1, description="Minimum number of reviews (e.g., 100)")
+
+    @field_validator('max_year')
+    @classmethod
+    def validate_year_range(cls, v, info):
+        if v is not None and info.data and info.data.get('min_year') is not None:
+            if v < info.data['min_year']:
+                raise ValueError('max_year must be greater than or equal to min_year')
+        return v
+
+
 class HybridRecommendationRequest(BaseModel):
-    """Request model for hybrid recommendations with configurable weights"""
+    """Request model for hybrid recommendations with configurable weights and comprehensive filtering"""
     liked_games: List[str] = Field(..., description="List of game IDs that the user likes")
     limit: int = Field(default=10, ge=1, le=50, description="Number of recommendations to return")
     exclude_owned: bool = Field(default=True, description="Whether to exclude games the user already owns")
     weights: Optional[ModelWeights] = Field(default=None, description="Custom model weights (defaults to balanced)")
+    filters: Optional[GameFilters] = Field(default=None, description="Advanced filtering options")
+
+    # Legacy support - keep exclude_franchise at top level for backwards compatibility
+    exclude_franchise: Optional[bool] = Field(default=None, description="DEPRECATED: Use filters.exclude_franchise instead")
 
 
 class GameRecommendation(BaseModel):

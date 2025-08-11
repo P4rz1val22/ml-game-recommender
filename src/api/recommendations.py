@@ -149,7 +149,7 @@ async def get_tag_recommendations(request: RecommendationRequest):
 
 @router.post("/hybrid", response_model=RecommendationResponse)
 async def get_hybrid_recommendations(request: HybridRecommendationRequest):
-    """Get recommendations using hybrid model with configurable weights"""
+    """Get recommendations using hybrid model with configurable weights and comprehensive filtering"""
     if hybrid_recommender is None:
         raise HTTPException(status_code=503, detail="Hybrid recommendation engine not initialized")
 
@@ -165,23 +165,62 @@ async def get_hybrid_recommendations(request: HybridRecommendationRequest):
                 "tags": request.weights.tags
             }
 
+        # Convert GameFilters to dict if provided
+        filters_dict = None
+        if request.filters:
+            filters_dict = {
+                "exclude_franchise": request.filters.exclude_franchise,
+                "platforms": request.filters.platforms,
+                "min_year": request.filters.min_year,
+                "max_year": request.filters.max_year,
+                "min_rating": request.filters.min_rating,
+                "min_reviews": request.filters.min_reviews
+            }
+            # Remove None values
+            filters_dict = {k: v for k, v in filters_dict.items() if v is not None}
+
+        # Handle legacy exclude_franchise parameter
+        legacy_exclude_franchise = request.exclude_franchise
+        if legacy_exclude_franchise is not None:
+            if filters_dict is None:
+                filters_dict = {}
+            filters_dict['exclude_franchise'] = legacy_exclude_franchise
+
         recommendations = hybrid_recommender.recommend_hybrid(
             liked_game_ids=request.liked_games,
             weights=weights_dict,
             n=request.limit,
-            exclude_owned=request.exclude_owned
+            exclude_owned=request.exclude_owned,
+            filters=filters_dict
         )
 
-        # Convert to response format
         game_recs = [
             GameRecommendation(**rec) for rec in recommendations
         ]
 
         processing_time = (time.time() - start_time) * 1000
 
-        # Include weight info in algorithm name
         weight_info = weights_dict or {"description": 0.6, "genre": 0.3, "tags": 0.1}
-        algorithm_name = f"hybrid_d{weight_info['description']}_g{weight_info['genre']}_t{weight_info['tags']}"
+        algorithm_parts = [f"hybrid_d{weight_info['description']}_g{weight_info['genre']}_t{weight_info['tags']}"]
+
+        if filters_dict:
+            filter_indicators = []
+            if filters_dict.get('exclude_franchise'):
+                filter_indicators.append("franchise_filtered")
+            if filters_dict.get('platforms'):
+                platform_count = len(filters_dict['platforms'])
+                filter_indicators.append(f"{platform_count}platforms")
+            if filters_dict.get('min_year') or filters_dict.get('max_year'):
+                filter_indicators.append("date_filtered")
+            if filters_dict.get('min_rating'):
+                filter_indicators.append(f"rating_{filters_dict['min_rating']}+")
+            if filters_dict.get('min_reviews'):
+                filter_indicators.append(f"{filters_dict['min_reviews']}+reviews")
+
+            if filter_indicators:
+                algorithm_parts.append("_".join(filter_indicators))
+
+        algorithm_name = "_".join(algorithm_parts)
 
         return RecommendationResponse(
             recommendations=game_recs,
